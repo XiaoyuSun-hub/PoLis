@@ -8,7 +8,7 @@ setup(
 	'click>=5',
         'shapely',
         'fiona',
-        'rtree==0.8'
+        'rtree==0.9' # 0.8
     ],
     entry_points='''
     [console_scripts]

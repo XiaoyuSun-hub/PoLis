@@ -25,3 +25,4 @@ Number of matches: 9
 Number of misses: 98608
 Duplicate matches: 0
 ```
+polis data/bag/ENS_252299_470784.shp data/brtbag/ENS_252299_470784.shp scores.shp
