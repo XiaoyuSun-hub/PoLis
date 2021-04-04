@@ -24,24 +24,60 @@ def path_leaf(path):
     return tail or ntpath.basename(head)
 
 
+def calc(totalref, totalpre, tp_ref, tp_pre):
+    totalpre_len = len(totalref)
+    totalref_len = len(totalpre)
+    precisionsum = 0
+    recallsum = 0
+    if totalpre_len==0 or totalref_len==0:
+       return 0, 0
+    # calculate the precision recall F1 for different threshold(which is iou)
+    for key in tp_ref.keys():
+        false_positive = totalpre_len-len(tp_pre[key])
+        true_positive = len(tp_ref[key])
+        if totalpre_len > 0 and totalref_len > 0:
+            precisionsum += true_positive / totalpre_len
+            recallsum += true_positive/totalref_len
+        else:
+            print("true postive:" + str(true_positive))
+            print("false_positive:" + str(false_positive))
+            print("false_negative:" + str(totalref_len-len(tp_ref[key])))
+    # divided by 10 because from 0.5 to 0.95 there are 10 threshold
+    AP = precisionsum/10
+    AR = recallsum/10
+    # if AP+AR > 0:
+    #     F1 = 2*AP*AR/(AP+AR)
+    # else:
+    #     F1 = 0
+    return AP, AR
+
+
 def score(in_ref, in_cmp):
-    """Given two polygon vector files, calculate the polis score
-    between them. The third argument specifies the output file, which
-    contains the same geometries as in_cmp, but with the polis score
-    assigned to the geometry.
-
-    We consider the first vector file to be the reference.
-
+    """Given two polygon vector files, calculate the coco metrics
+    between them.We consider the first vector file to be the reference.
     """
     # Threshold = 0.5
     idx = index.Index()
     tp_pre = {}
     tp_ref = {}
+    tp_pre_small = {}
+    tp_ref_small = {}
+    tp_pre_medium = {}
+    tp_ref_medium = {}
+    tp_pre_large = {}
+    tp_ref_large = {}
+    pre_small = []
+    ref_small = []
+    pre_medium = []
+    ref_medium = []
+    pre_large = []
+    ref_large = []
     tp_predicted = []
     tp_reference = []
     precision = {}
     recall = {}
-    F1all = {}
+    # F1all = {}
+
     # iouthrs = np.arange(start=0.5, stop=0.95, step=0.05)
     iouthrs = [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
     # precision = np.zero(len(iouthr))
@@ -49,18 +85,39 @@ def score(in_ref, in_cmp):
     for threshold in iouthrs:
         tp_ref[str(threshold)] = []
         tp_pre[str(threshold)] = []
+        tp_ref_small[str(threshold)] = []
+        tp_pre_small[str(threshold)] = []
+        tp_ref_medium[str(threshold)] = []
+        tp_pre_medium[str(threshold)] = []
+        tp_ref_large[str(threshold)] = []
+        tp_pre_large[str(threshold)] = []
         precision[str(threshold)] = 0
         recall[str(threshold)] = 0
-        F1all[str(threshold)] = 0
+        # F1all[str(threshold)] = 0
 
     with fiona.open(in_ref) as refsrc:
         with fiona.open(in_cmp) as cmpsrc:
             for fid, feature in refsrc.items():
                 poly = geometry.shape(feature['geometry'])
                 idx.insert(fid, poly.bounds)
+                # store the polygons in reference file with different size
+                if poly.area < 32:
+                    ref_small = ref_small+[fid]
+                if poly.area >= 32 and poly.area <= 96:
+                    ref_medium = ref_medium+[fid]
+                if poly.area > 96:
+                    ref_large = ref_large+[fid]
 
             for fid_cmp, rec in cmpsrc.items():
                 cmp_poly = geometry.shape(rec['geometry'])
+                # store the polygons in predict file with different size
+                if cmp_poly.area < 32:
+                    pre_small = pre_small+[fid_cmp]
+                if cmp_poly.area >= 32 and cmp_poly.area <= 96:
+                    pre_medium = pre_medium+[fid_cmp]
+                if cmp_poly.area > 96:
+                    pre_large = pre_large+[fid_cmp]
+
                 # find the reference polygons intersect with predict polygons by their boundbox
                 fids = [int(i) for i in idx.intersection(
                         cmp_poly.bounds)]
@@ -83,14 +140,29 @@ def score(in_ref, in_cmp):
                                         threshold)] + [fid]
                                     tp_pre[str(threshold)] = tp_pre[str(
                                         threshold)]+[fid_cmp]
+                                    # https://github.com/cocodataset/cocoapi/issues/36,both gt and dt should fufill the area restriction
+                                    if cmp_poly.area < 32 and ref_poly.area < 32:
+                                        tp_ref_small[str(threshold)] = tp_ref_small[str(
+                                            threshold)]+[fid]
+                                        tp_pre_small[str(threshold)] = tp_pre_small[str(
+                                            threshold)]+[fid]
+                                    if cmp_poly.area >= 32 and cmp_poly.area <= 96 and ref_poly.area >= 32 and ref_poly.area <= 96:
+                                        tp_ref_medium[str(threshold)] = tp_ref_medium[str(
+                                            threshold)]+[fid]
+                                        tp_pre_medium[str(threshold)] = tp_pre_medium[str(
+                                            threshold)]+[fid]
+                                    if cmp_poly.area > 96 and ref_poly.area > 96:
+                                        tp_ref_large[str(threshold)] = tp_ref_large[str(
+                                            threshold)]+[fid]
+                                        tp_pre_large[str(threshold)] = tp_pre_large[str(
+                                            threshold)]+[fid]
 
             totalpre = len(shp_to_list(in_cmp))
             totalref = len(shp_to_list(in_ref))
             precisionsum = 0
             recallsum = 0
+            # calculate the precision recall F1 for different threshold(which is iou)
             for key in tp_ref.keys():
-                # false_negative = totalref-len(tp_ref[key])
-                # predicted to be positive and it is true(in reality it is positive)
                 false_positive = totalpre-len(tp_pre[key])
                 true_positive = len(tp_ref[key])
                 if totalpre > 0 and totalref > 0:
@@ -98,11 +170,11 @@ def score(in_ref, in_cmp):
                     recallsum += true_positive/totalref
                     precision[key] = true_positive / totalpre
                     recall[key] = true_positive/totalref
-                    if precision[key] + recall[key] > 0:
-                        F1all[key] = 2*precision[key] * recall[key] / \
-                            (precision[key] + recall[key])
-                    else:
-                        F1all[key] = 0
+                    # if precision[key] + recall[key] > 0:
+                    #     F1all[key] = 2*precision[key] * recall[key] / \
+                    #         (precision[key] + recall[key])
+                    # else:
+                    #     F1all[key] = 0
                 else:
                     print("true postive:" + str(true_positive))
                     print("false_positive:" + str(false_positive))
@@ -115,9 +187,12 @@ def score(in_ref, in_cmp):
                 F1 = 2*AP*AR/(AP+AR)
             else:
                 F1 = 0
-
+            AP_S, AR_S = calc(ref_small, pre_small, tp_ref_small, tp_pre_small)
+            AP_M, AR_M = calc(ref_medium, pre_medium,
+                              tp_ref_medium, tp_pre_medium)
+            AP_L, AR_L = calc(ref_large, pre_large, tp_ref_large, tp_pre_large)
     filename = in_cmp
-    return filename, AP, AR, F1, precision, recall, F1all
+    return filename, AP, AR, F1, precision, recall, AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L
 
 
 @ click.command()
@@ -141,13 +216,13 @@ def ComputeMetrics(in_refdir, in_cmpdir):
         in_refpath = os.path.join(in_refdir, referfile)
         in_cmppath = join(in_cmpdir, cmpfile)
 
-        filename, AP, AR, F1, precision, recall, F1all = score(
+        filename, AP, AR, F1, precision, recall, AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L = score(
             in_refpath, in_cmppath)
         onlyfile = path_leaf(filename)
 
         # dictscore[onlyfile] = [AP, AR, F1,precision["0.5"],precision["0.55"],precision["0.6"],precision["0.65"],precision["0.7"],precision["0.75"],precision["0.8"],precision["0.85"],precision["0.9"],precision["0.95"],recall["0.5"],recall["0.55"],recall["0.6"],recall["0.65"],recall["0.7"],recall["0.75"],recall["0.8"],recall["0.85"],recall["0.9"],recall["0.95"]]
         dictscore[onlyfile] = [AP, AR, F1]+[vals for k,
-                                            vals in precision.items()]+[vals2 for k2, vals2 in recall.items()]
+                                            vals in precision.items()]+[vals2 for k2, vals2 in recall.items()]+[AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L]
 
     split_name = "cocometric"
     stats_filepath = join(in_cmpdir, "{}.csv".format(split_name))
@@ -156,7 +231,8 @@ def ComputeMetrics(in_refdir, in_cmpdir):
     # otherwise there are blank lines between rows
     stats_file = open(stats_filepath, "w", newline='')
     fnames = ["name", "AP", "AR", "F1", "P50", "P55", "P60", "P65", "P70", "P75", "P80", "P85",
-              "P90", "P95", "R50", "R55", "R60", "R65", "R70", "R75", "R80", "R85", "R90", "R95"]
+              "P90", "P95", "R50", "R55", "R60", "R65", "R70", "R75", "R80", "R85", "R90", "R95", "APS", "ARS",
+              "APM", "ARM", "APL", "ARL"]
     writer = csv.DictWriter(stats_file, fieldnames=fnames)
     writer.writeheader()
     # for filename, averagescore in filenames,averagescores:
@@ -184,6 +260,12 @@ def ComputeMetrics(in_refdir, in_cmpdir):
     Av_R85 = 0
     Av_R90 = 0
     Av_R95 = 0
+    Av_APS = 0
+    Av_ARS = 0
+    Av_APM = 0
+    Av_ARM = 0
+    Av_APL = 0
+    Av_ARL = 0
 
     for filename in dictscore.keys():
         print(filename)
@@ -212,6 +294,12 @@ def ComputeMetrics(in_refdir, in_cmpdir):
             "R85": dictscore[filename][20],
             "R90": dictscore[filename][21],
             "R95": dictscore[filename][22],
+            "APS": dictscore[filename][23],
+            "ARS": dictscore[filename][24],
+            "APM": dictscore[filename][25],
+            "ARM": dictscore[filename][26],
+            "APL": dictscore[filename][27],
+            "ARL": dictscore[filename][28],
         })
         Av_AP += dictscore[filename][0]
         Av_AR += dictscore[filename][1]
@@ -236,7 +324,14 @@ def ComputeMetrics(in_refdir, in_cmpdir):
         Av_R85 += dictscore[filename][20]
         Av_R90 += dictscore[filename][21]
         Av_R95 += dictscore[filename][22]
-    num_files=len(dictscore.keys())
+        Av_APS += dictscore[filename][23]
+        Av_ARS += dictscore[filename][24]
+        Av_APM += dictscore[filename][25]
+        Av_ARM += dictscore[filename][26]
+        Av_APL += dictscore[filename][27]
+        Av_ARL += dictscore[filename][28]
+
+    num_files = len(dictscore.keys())
     writer.writerow({
         "name": "average",
         "AP": Av_AP/num_files,
@@ -262,6 +357,12 @@ def ComputeMetrics(in_refdir, in_cmpdir):
         "R85": Av_R85/num_files,
         "R90": Av_R90/num_files,
         "R95": Av_R95/num_files,
+        "APS": Av_APS/num_files,
+        "ARS": Av_ARS/num_files,
+        "APM": Av_APM/num_files,
+        "ARM": Av_ARM/num_files,
+        "APL": Av_APL/num_files,
+        "ARL": Av_ARL/num_files,
     })
 
     stats_file.close()
