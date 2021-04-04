@@ -21,8 +21,12 @@ polis data/FullSubset.shp data/user_data.shp scores.shp
 You should see this after a few seconds (in addition to scores.shp being created; it contains the geometies and their score):
 ```
 $ polis data/FullSubset.shp data/user_data.shp data/out.shp
-Number of matches: 9
-Number of misses: 98608
-Duplicate matches: 0
+
 ```
-polis data/bag/ENS_252299_470784.shp data/brtbag/ENS_252299_470784.shp scores.shp
+# COCO Metrics
+A tool to calculate the coco metrics on vector data, both ground truth and predicted results are polygons
+```
+metrics referencedir prediteddir
+the file filter pattern is inside the code for now, you need to changed it according your own data.
+
+```

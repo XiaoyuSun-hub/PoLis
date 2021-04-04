@@ -166,10 +166,10 @@ def score(in_ref, in_cmp):
                 false_positive = totalpre-len(tp_pre[key])
                 true_positive = len(tp_ref[key])
                 if totalpre > 0 and totalref > 0:
-                    precisionsum += true_positive / totalpre
-                    recallsum += true_positive/totalref
                     precision[key] = true_positive / totalpre
                     recall[key] = true_positive/totalref
+                    precisionsum += precision[key]
+                    recallsum += recall[key]
                     # if precision[key] + recall[key] > 0:
                     #     F1all[key] = 2*precision[key] * recall[key] / \
                     #         (precision[key] + recall[key])
@@ -188,8 +188,7 @@ def score(in_ref, in_cmp):
             else:
                 F1 = 0
             AP_S, AR_S = calc(ref_small, pre_small, tp_ref_small, tp_pre_small)
-            AP_M, AR_M = calc(ref_medium, pre_medium,
-                              tp_ref_medium, tp_pre_medium)
+            AP_M, AR_M = calc(ref_medium, pre_medium, tp_ref_medium, tp_pre_medium)
             AP_L, AR_L = calc(ref_large, pre_large, tp_ref_large, tp_pre_large)
     filename = in_cmp
     return filename, AP, AR, F1, precision, recall, AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L
@@ -216,11 +215,8 @@ def ComputeMetrics(in_refdir, in_cmpdir):
         in_refpath = os.path.join(in_refdir, referfile)
         in_cmppath = join(in_cmpdir, cmpfile)
 
-        filename, AP, AR, F1, precision, recall, AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L = score(
-            in_refpath, in_cmppath)
+        filename, AP, AR, F1, precision, recall, AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L = score(in_refpath, in_cmppath)
         onlyfile = path_leaf(filename)
-
-        # dictscore[onlyfile] = [AP, AR, F1,precision["0.5"],precision["0.55"],precision["0.6"],precision["0.65"],precision["0.7"],precision["0.75"],precision["0.8"],precision["0.85"],precision["0.9"],precision["0.95"],recall["0.5"],recall["0.55"],recall["0.6"],recall["0.65"],recall["0.7"],recall["0.75"],recall["0.8"],recall["0.85"],recall["0.9"],recall["0.95"]]
         dictscore[onlyfile] = [AP, AR, F1]+[vals for k,
                                             vals in precision.items()]+[vals2 for k2, vals2 in recall.items()]+[AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L]
 
