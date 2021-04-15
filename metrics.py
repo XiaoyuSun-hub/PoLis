@@ -29,8 +29,8 @@ def calc(totalref, totalpre, tp_ref, tp_pre):
     totalref_len = len(totalpre)
     precisionsum = 0
     recallsum = 0
-    if totalpre_len==0 or totalref_len==0:
-       return 0, 0
+    if totalpre_len == 0 or totalref_len == 0:
+        return 0, 0
     # calculate the precision recall F1 for different threshold(which is iou)
     for key in tp_ref.keys():
         false_positive = totalpre_len-len(tp_pre[key])
@@ -77,7 +77,13 @@ def score(in_ref, in_cmp):
     precision = {}
     recall = {}
     # F1all = {}
-
+    # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/cocoeval.py
+    # https://cocodataset.org/#detection-eval in coco,Area is measured as the number of pixels in the segmentation mask
+    # in our data, the polygon is in RD_NEw coor sys, the unit is meter, which is extracted from the segmentation result of
+    # VHR image with the resolution 0.25 m. so we need to convert calculated the area based on pixels to meters in vector data, area for 32*32pixel =32*32*0.25*0.25
+    areaperpixel = 0.25**2
+    smallarea = 32**2*areaperpixel
+    mediumarea = 96**2*areaperpixel
     # iouthrs = np.arange(start=0.5, stop=0.95, step=0.05)
     iouthrs = [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95]
     # precision = np.zero(len(iouthr))
@@ -101,21 +107,22 @@ def score(in_ref, in_cmp):
                 poly = geometry.shape(feature['geometry'])
                 idx.insert(fid, poly.bounds)
                 # store the polygons in reference file with different size
-                if poly.area < 32:
+
+                if poly.area < smallarea:
                     ref_small = ref_small+[fid]
-                if poly.area >= 32 and poly.area <= 96:
+                if poly.area >= smallarea and poly.area <= mediumarea:
                     ref_medium = ref_medium+[fid]
-                if poly.area > 96:
+                if poly.area > mediumarea:
                     ref_large = ref_large+[fid]
 
             for fid_cmp, rec in cmpsrc.items():
                 cmp_poly = geometry.shape(rec['geometry'])
                 # store the polygons in predict file with different size
-                if cmp_poly.area < 32:
+                if cmp_poly.area < smallarea:
                     pre_small = pre_small+[fid_cmp]
-                if cmp_poly.area >= 32 and cmp_poly.area <= 96:
+                if cmp_poly.area >= smallarea and cmp_poly.area <= mediumarea:
                     pre_medium = pre_medium+[fid_cmp]
-                if cmp_poly.area > 96:
+                if cmp_poly.area > 96**2*areaperpixel:
                     pre_large = pre_large+[fid_cmp]
 
                 # find the reference polygons intersect with predict polygons by their boundbox
@@ -141,12 +148,12 @@ def score(in_ref, in_cmp):
                                     tp_pre[str(threshold)] = tp_pre[str(
                                         threshold)]+[fid_cmp]
                                     # https://github.com/cocodataset/cocoapi/issues/36,both gt and dt should fufill the area restriction
-                                    if cmp_poly.area < 32 and ref_poly.area < 32:
+                                    if cmp_poly.area < smallarea and ref_poly.area <smallarea:
                                         tp_ref_small[str(threshold)] = tp_ref_small[str(
                                             threshold)]+[fid]
                                         tp_pre_small[str(threshold)] = tp_pre_small[str(
                                             threshold)]+[fid]
-                                    if cmp_poly.area >= 32 and cmp_poly.area <= 96 and ref_poly.area >= 32 and ref_poly.area <= 96:
+                                    if cmp_poly.area >= smallarea and cmp_poly.area <= mediumarea and ref_poly.area >= smallarea and ref_poly.area <=mediumarea:
                                         tp_ref_medium[str(threshold)] = tp_ref_medium[str(
                                             threshold)]+[fid]
                                         tp_pre_medium[str(threshold)] = tp_pre_medium[str(
@@ -188,7 +195,8 @@ def score(in_ref, in_cmp):
             else:
                 F1 = 0
             AP_S, AR_S = calc(ref_small, pre_small, tp_ref_small, tp_pre_small)
-            AP_M, AR_M = calc(ref_medium, pre_medium, tp_ref_medium, tp_pre_medium)
+            AP_M, AR_M = calc(ref_medium, pre_medium,
+                              tp_ref_medium, tp_pre_medium)
             AP_L, AR_L = calc(ref_large, pre_large, tp_ref_large, tp_pre_large)
     filename = in_cmp
     return filename, AP, AR, F1, precision, recall, AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L
@@ -215,7 +223,8 @@ def ComputeMetrics(in_refdir, in_cmpdir):
         in_refpath = os.path.join(in_refdir, referfile)
         in_cmppath = join(in_cmpdir, cmpfile)
 
-        filename, AP, AR, F1, precision, recall, AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L = score(in_refpath, in_cmppath)
+        filename, AP, AR, F1, precision, recall, AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L = score(
+            in_refpath, in_cmppath)
         onlyfile = path_leaf(filename)
         dictscore[onlyfile] = [AP, AR, F1]+[vals for k,
                                             vals in precision.items()]+[vals2 for k2, vals2 in recall.items()]+[AP_S, AR_S,  AP_M, AR_M,  AP_L, AR_L]
